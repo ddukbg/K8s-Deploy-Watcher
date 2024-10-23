@@ -1,0 +1,10 @@
+apiVersion: ddukbg/v1alpha1
+kind: DeploymentTracker
+metadata:
+  name: my-app-deployment-tracker
+spec:
+  deploymentName: my-app
+  namespace: default
+  notify:
+    slack: "https://hooks.slack.com/services/..."
+    email: "alert@example.com"
