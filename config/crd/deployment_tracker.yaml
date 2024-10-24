@@ -7,17 +7,29 @@ spec:
   names:
     kind: DeploymentTracker
     plural: deploymenttrackers
+    singular: deploymenttracker
+    shortNames:
+      - dt
   scope: Namespaced
   versions:
   - name: v1alpha1
     served: true
     storage: true
+    additionalPrinterColumns:  # 추가: kubectl get 명령어에서 보이는 컬럼
+    - name: Ready
+      type: boolean
+      jsonPath: .status.ready
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
     schema:
       openAPIV3Schema:
         type: object
+        required: ["spec"]  # spec을 필수값으로 지정
         properties:
           spec:
             type: object
+            required: ["deploymentName"]  # deploymentName을 필수값으로 지정
             properties:
               deploymentName:
                 type: string
@@ -28,5 +40,29 @@ spec:
                 properties:
                   slack:
                     type: string
+                    pattern: '^https://hooks\.slack\.com/services/.*$'  # Slack URL 형식 검증
                   email:
                     type: string
+                    pattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'  # 이메일 형식 검증
+                  retryCount:
+                    type: integer
+                    minimum: 0
+                    maximum: 5
+                  alertOnFail:
+                    type: boolean
+          status:
+            type: object
+            properties:
+              ready:
+                type: boolean
+              lastUpdated:
+                type: string
+                format: date-time
+              observedReplicas:
+                type: integer
+              readyReplicas:
+                type: integer
+              message:
+                type: string
+    subresources:
+      status: {}  # status 서브리소스 활성화

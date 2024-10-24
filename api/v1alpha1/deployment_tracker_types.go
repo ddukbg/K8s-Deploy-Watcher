@@ -17,9 +17,23 @@ type Notify struct {
 	Email string `json:"email,omitempty"`
 }
 
-// DeploymentTrackerStatus defines the observed state of DeploymentTracker
+// DeploymentTrackerStatus에 더 자세한 상태 정보 추가 필요
 type DeploymentTrackerStatus struct {
-	Ready bool `json:"ready,omitempty"`
+    Ready bool `json:"ready,omitempty"`
+    // 추가할 필드들:
+    LastUpdated       metav1.Time `json:"lastUpdated,omitempty"`
+    ObservedReplicas int32       `json:"observedReplicas,omitempty"`
+    ReadyReplicas    int32       `json:"readyReplicas,omitempty"`
+    Message          string      `json:"message,omitempty"`
+}
+
+// Notify 구조체에 알림 설정 추가
+type Notify struct {
+    Slack       string `json:"slack,omitempty"`
+    Email       string `json:"email,omitempty"`
+    // 추가할 필드들:
+    RetryCount  int    `json:"retryCount,omitempty"`
+    AlertOnFail bool   `json:"alertOnFail,omitempty"`
 }
 
 // +kubebuilder:object:root=true

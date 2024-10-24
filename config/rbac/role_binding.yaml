@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: deployment-tracker-rolebinding
+subjects:
+- kind: ServiceAccount
+  name: deployment-tracker
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: deployment-tracker-role
+  apiGroup: rbac.authorization.k8s.io

@@ -8,3 +8,5 @@ spec:
   notify:
     slack: "https://hooks.slack.com/services/..."
     email: "alert@example.com"
+    retryCount: 3
+    alertOnFail: true
