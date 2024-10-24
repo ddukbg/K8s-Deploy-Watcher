@@ -56,16 +56,111 @@ helm install deploy-watcher ddukbg/k8s-deploy-watcher \
 ### 수동 설치
 
 ```bash
-# 저장소 클론
-git clone https://github.com/ddukbg/k8s-deploy-watcher.git
-cd k8s-deploy-watcher
-
-# CRD 및 RBAC 설치
+# 1. CRD 및 RBAC 설정 적용
 kubectl apply -f config/crd/deployment_tracker.yaml
-kubectl apply -f config/rbac/
+kubectl apply -f config/rbac/role.yaml
+kubectl apply -f config/rbac/role_binding.yaml
 
-# Operator 배포
+# 2. Operator Deployment 생성 및 적용
+cat <<EOF > config/manager/manager.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-deploy-watcher
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-deploy-watcher
+  template:
+    metadata:
+      labels:
+        app: k8s-deploy-watcher
+    spec:
+      serviceAccountName: deployment-tracker
+      containers:
+      - name: manager
+        image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/k8s-deploy-watcher:latest
+        ports:
+        - containerPort: 8080
+          name: metrics
+        - containerPort: 8081
+          name: health
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 200m
+            memory: 128Mi
+EOF
+
 kubectl apply -f config/manager/manager.yaml
+
+# 3. Operator Pod 실행 상태 확인
+kubectl get pods -l app=k8s-deploy-watcher
+kubectl logs -l app=k8s-deploy-watcher
+
+# 4. 테스트용 Deployment 생성
+cat <<EOF > nginx-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+EOF
+
+kubectl apply -f nginx-deployment.yaml
+
+# 5. DeploymentTracker CR 생성
+cat <<EOF > tracker-example.yaml
+apiVersion: ddukbg.k8s/v1alpha1
+kind: DeploymentTracker
+metadata:
+  name: nginx-tracker
+spec:
+  deploymentName: nginx
+  namespace: default
+  notify:
+    slack: "https://hooks.slack.com/services/YOUR-WEBHOOK-URL"
+    retryCount: 3
+    alertOnFail: true
+EOF
+
+kubectl apply -f tracker-example.yaml
+
+# 6. DeploymentTracker 상태 확인
+kubectl get deploymenttracker
+kubectl describe deploymenttracker nginx-tracker
+
+# 7. 배포 변경으로 테스트
+kubectl set image deployment/nginx nginx=nginx:1.25.0
+
+# 8. 로그 및 Slack 알림 확인
+kubectl logs -l app=k8s-deploy-watcher
 ```
 
 ## 📋 사용 방법
@@ -73,7 +168,8 @@ kubectl apply -f config/manager/manager.yaml
 ### 1. DeploymentTracker 리소스 생성
 
 ```yaml
-apiVersion: ddukbg/v1alpha1
+# Deployment 단일 대상으로 지정
+apiVersion: ddukbg.k8s/v1alpha1
 kind: DeploymentTracker
 metadata:
   name: my-app-tracker
@@ -85,6 +181,18 @@ spec:
     email: "alert@example.com"
     retryCount: 3
     alertOnFail: true
+```
+
+```yaml
+# All 모든 배포 대상으로 지정(미구현)
+apiVersion: ddukbg/v1alpha1
+kind: DeploymentTracker
+metadata:
+  name: all-deployments-tracker
+spec:
+  notify:
+    slack: "https://hooks.slack.com/services/..."
+    email: "alert@example.com"
 ```
 
 ### 2. 상태 확인
