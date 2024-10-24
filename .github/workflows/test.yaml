@@ -9,12 +9,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4    # v2에서 v4로 업그레이드
+    - uses: actions/checkout@v4
     
     - name: Set up Go
-      uses: actions/setup-go@v5    # v2에서 v5로 업그레이드
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.16'
+        go-version: '1.22.1'  # go.mod 버전과 일치하도록 수정
         
     - name: Verify dependencies
       run: |
@@ -31,7 +31,7 @@ jobs:
         make integration-test
         
     - name: Upload test coverage
-      uses: actions/upload-artifact@v3    # v2에서 v3로 업그레이드
+      uses: actions/upload-artifact@v3
       with:
         name: coverage-report
         path: cover.out
