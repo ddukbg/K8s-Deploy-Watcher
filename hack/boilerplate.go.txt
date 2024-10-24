@@ -1,0 +1,5 @@
+/*
+Copyright 2024 ddukbg.
+
+Licensed under the MIT License.
+*/
