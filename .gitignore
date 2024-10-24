@@ -1,0 +1,38 @@
+# macOS system files
+.DS_Store
+**/.DS_Store
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Binary files
+bin/
+/k8s-deploy-watcher
+
+# Test binary, built with `go test -c`
+*.test
+
+# Test coverage
+*.out
+coverage.txt
+
+# Go specific
+vendor/
+
+# Kubernetes Generated files
+config/crd/bases/
+config/webhooks/
+config/certmanager/
+config/prometheus/
+config/rbac/auth_proxy_*
+config/rbac/role_binding.yaml
+config/rbac/leader_election_role.yaml
+config/rbac/leader_election_role_binding.yaml
+
+# Helm
+charts/*/charts
+charts/*/Chart.lock

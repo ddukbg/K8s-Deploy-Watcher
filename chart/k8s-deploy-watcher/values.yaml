@@ -1,0 +1,36 @@
+replicaCount: 1
+
+image:
+  repository: ddukbg/k8s-deploy-watcher
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+metrics:
+  enabled: true
+  port: 8080
+
+healthProbe:
+  port: 8081

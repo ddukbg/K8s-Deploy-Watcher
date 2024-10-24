@@ -38,9 +38,14 @@ K8s-Deploy-Watcher는 Kubernetes Deployment의 실시간 상태를 모니터링�
 ### Helm을 사용한 설치
 
 ```bash
-# Helm 저장소 추가
-helm repo add ddukbg https://ddukbg.github.io/helm-charts
-helm repo update
+# 프로젝트 클론
+git clone https://github.com/ddukbg/k8s-deploy-watcher.git
+cd k8s-deploy-watcher
+
+# Helm 차트 설치
+helm install deploy-watcher ./charts/k8s-deploy-watcher \
+  --namespace deploy-watcher \
+  --create-namespace
 
 # Operator 설치
 helm install deploy-watcher ddukbg/k8s-deploy-watcher \
@@ -214,7 +219,7 @@ kubectl get events --field-selector involvedObject.kind=DeploymentTracker
 ## 📞 문의하기
 
 - Issue 생성: [GitHub Issues](https://github.com/ddukbg/k8s-deploy-watcher/issues)
-- 이메일: ddukbg@example.com
+- 이메일: wowrebong@gmail.com
 - Slack: [Kubernetes Slack #deploy-watcher](https://kubernetes.slack.com/messages/deploy-watcher)
 
 ---

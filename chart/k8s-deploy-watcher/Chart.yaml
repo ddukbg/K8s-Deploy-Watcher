@@ -1,0 +1,14 @@
+apiVersion: v2
+name: k8s-deploy-watcher
+description: A Kubernetes operator for monitoring deployment status and sending notifications
+version: 0.1.0
+appVersion: "1.0.0"
+maintainers:
+  - name: ddukbg
+    email: wowrebong@gmail.com
+type: application
+keywords:
+  - kubernetes
+  - operator
+  - deployment
+  - monitoring
