@@ -1,6 +1,6 @@
 # Build stage
 # Go 버전 업데이트
-FROM golang:1.20 as builder
+FROM golang:1.22.1 as builder
 
 WORKDIR /workspace
 # 캐시 활용을 위해 go.mod와 go.sum을 먼저 복사

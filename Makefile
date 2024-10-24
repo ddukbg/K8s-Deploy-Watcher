@@ -53,13 +53,23 @@ generate: controller-gen
 manifests: controller-gen
 	$(CONTROLLER_GEN) crd paths="./..." output:crd:artifacts:config=config/crd/bases
 
+# Docker 관련 타겟
 .PHONY: docker-build
 docker-build:
-	docker build -t ${IMG}:${IMG_TAG} .
+	docker build -t $(IMG) .
 
 .PHONY: docker-push
 docker-push:
-	docker push ${IMG}:${IMG_TAG}
+	docker push $(IMG)
+
+# 버전 태그 추가
+.PHONY: docker-tag
+docker-tag:
+	docker tag $(IMG) $(IMG):$(VERSION)
+
+# 모든 Docker 작업 실행
+.PHONY: docker-all
+docker-all: docker-build docker-tag docker-push
 
 .PHONY: install
 install:
