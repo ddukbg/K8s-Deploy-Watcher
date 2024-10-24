@@ -3,7 +3,7 @@ kind: ClusterRole
 metadata:
   name: deployment-tracker-role
 rules:
-- apiGroups: ["ddukbg"]
+- apiGroups: ["ddukbg.k8s"]
   resources: ["deploymenttrackers"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["apps"]
@@ -12,6 +12,6 @@ rules:
 - apiGroups: [""]
   resources: ["events"]
   verbs: ["create"]
-- apiGroups: ["ddukbg"]
+- apiGroups: ["ddukbg.k8s"]
   resources: ["deploymenttrackers/status"]
   verbs: ["get", "update", "patch"]

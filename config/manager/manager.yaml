@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-deploy-watcher
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-deploy-watcher
+  template:
+    metadata:
+      labels:
+        app: k8s-deploy-watcher
+    spec:
+      serviceAccountName: deployment-tracker
+      containers:
+      - name: manager
+        image: ddukbg/k8s-deploy-watcher:latest
+        ports:
+        - containerPort: 8080
+          name: metrics
+        - containerPort: 8081
+          name: health
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 200m
+            memory: 128Mi
