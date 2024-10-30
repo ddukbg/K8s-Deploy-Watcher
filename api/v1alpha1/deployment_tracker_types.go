@@ -7,9 +7,10 @@ import (
 
 // DeploymentTrackerSpec defines the desired state of DeploymentTracker
 type DeploymentTrackerSpec struct {
-	DeploymentName string       `json:"deploymentName,omitempty"`
-	Namespace      string       `json:"namespace,omitempty"`
-	Notify         NotifyConfig `json:"notify"`
+    DeploymentName string       `json:"deploymentName,omitempty"`
+    Namespace     string       `json:"namespace,omitempty"`
+    Notify        NotifyConfig `json:"notify"`
+    NotifyOnScale bool         `json:"notifyOnScale,omitempty"` // 스케일링 알림 옵션
 }
 
 // NotifyConfig defines notification details

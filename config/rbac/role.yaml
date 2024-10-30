@@ -1,3 +1,4 @@
+# config/rbac/role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -8,10 +9,10 @@ rules:
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["apps"]
   resources: ["deployments"]
-  verbs: ["get", "list", "watch"]
+  verbs: ["get", "list", "watch", "update", "patch"]
 - apiGroups: [""]
-  resources: ["events"]
-  verbs: ["create"]
+  resources: ["events"]  # events 리소스 추가
+  verbs: ["create", "patch"]
 - apiGroups: ["ddukbg.k8s"]
   resources: ["deploymenttrackers/status"]
   verbs: ["get", "update", "patch"]
