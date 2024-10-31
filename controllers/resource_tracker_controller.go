@@ -39,6 +39,10 @@ func (r *ResourceTrackerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&appsv1.Deployment{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForResource),
 		).
+		Watches(
+			&appsv1.StatefulSet{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForResource),
+		).
 		Complete(r)
 }
 
@@ -52,7 +56,7 @@ func (r *ResourceTrackerReconciler) findObjectsForResource(ctx context.Context, 
 
 	var requests []ctrl.Request
 	for _, tracker := range trackers.Items {
-		if tracker.Spec.Target.Kind == "Deployment" &&
+		if (tracker.Spec.Target.Kind == "Deployment" || tracker.Spec.Target.Kind == "StatefulSet") &&
 			tracker.Spec.Target.Name == obj.GetName() &&
 			tracker.Spec.Target.Namespace == obj.GetNamespace() {
 			requests = append(requests, ctrl.Request{
@@ -82,7 +86,7 @@ func (r *ResourceTrackerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	case "Deployment":
 		return r.reconcileDeployment(ctx, tracker)
 	case "StatefulSet":
-		return ctrl.Result{}, fmt.Errorf("StatefulSet reconciliation not implemented yet")
+		return r.reconcileStatefulSet(ctx, tracker)
 	default:
 		err := fmt.Errorf("unsupported resource kind: %s", tracker.Spec.Target.Kind)
 		logger.Error(err, "Unsupported resource kind")
@@ -191,6 +195,123 @@ func (r *ResourceTrackerReconciler) reconcileDeployment(ctx context.Context, tra
 			tracker.Status.Message = "Resource is running successfully"
 			r.Recorder.Event(tracker, corev1.EventTypeNormal, "ResourceReady",
 				fmt.Sprintf("Resource %s is running successfully", deployment.Name))
+
+			// Slack 알림 추가
+			if tracker.Spec.Notify.Slack != "" {
+				message := fmt.Sprintf("*Deployment %s/%s is now ready*\n"+
+					"> Status: Running\n"+
+					"> Ready Replicas: %d/%d",
+					deployment.Namespace, deployment.Name,
+					deployment.Status.ReadyReplicas,
+					*deployment.Spec.Replicas)
+
+				if err := sendSlackNotification(tracker.Spec.Notify.Slack, message); err != nil {
+					logger.Error(err, "Failed to send Slack notification")
+				}
+			}
+		} else {
+			tracker.Status.Message = "Resource is not ready"
+		}
+
+		if err := r.Status().Update(ctx, tracker); err != nil {
+			logger.Error(err, "Failed to update ResourceTracker status")
+			return ctrl.Result{}, err
+		}
+	}
+
+	return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+}
+
+func (r *ResourceTrackerReconciler) reconcileStatefulSet(ctx context.Context, tracker *ddukbgv1alpha1.ResourceTracker) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// StatefulSet 가져오기
+	statefulset := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Name:      tracker.Spec.Target.Name,
+		Namespace: tracker.Spec.Target.Namespace,
+	}, statefulset); err != nil {
+		logger.Error(err, "Failed to fetch StatefulSet")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	// 현재 이미지 가져오기
+	currentImage := ""
+	if len(statefulset.Spec.Template.Spec.Containers) > 0 {
+		currentImage = statefulset.Spec.Template.Spec.Containers[0].Image
+	}
+
+	// 이전 이미지와 비교
+	previousImage, ok := statefulset.Annotations["ddukbg.k8s/previous-image"]
+	if !ok {
+		// 최초 실행 시
+		if statefulset.Annotations == nil {
+			statefulset.Annotations = make(map[string]string)
+		}
+		statefulset.Annotations["ddukbg.k8s/previous-image"] = currentImage
+		if err := r.Update(ctx, statefulset); err != nil {
+			logger.Error(err, "Failed to update statefulset annotations")
+			return ctrl.Result{}, err
+		}
+	} else if previousImage != currentImage {
+		// 이미지가 변경됨
+		tracker.Status.LastUpdated = &metav1.Time{Time: time.Now()}
+		tracker.Status.Message = fmt.Sprintf("Image updated from %s to %s", previousImage, currentImage)
+
+		// StatefulSet 주석 업데이트
+		statefulset.Annotations["ddukbg.k8s/previous-image"] = currentImage
+		if err := r.Update(ctx, statefulset); err != nil {
+			logger.Error(err, "Failed to update statefulset annotations")
+			return ctrl.Result{}, err
+		}
+
+		// Status 업데이트
+		if err := r.Status().Update(ctx, tracker); err != nil {
+			logger.Error(err, "Failed to update ResourceTracker status")
+			return ctrl.Result{}, err
+		}
+
+		// Slack 알림 전송
+		if tracker.Spec.Notify.Slack != "" {
+			message := fmt.Sprintf("*StatefulSet %s/%s image updated*\n"+
+				"> Previous Image: %s\n"+
+				"> New Image: %s",
+				statefulset.Namespace, statefulset.Name,
+				previousImage, currentImage)
+
+			if err := sendSlackNotification(tracker.Spec.Notify.Slack, message); err != nil {
+				logger.Error(err, "Failed to send Slack notification")
+			}
+		}
+	}
+
+	// StatefulSet 상태 확인
+	isReady := statefulset.Status.ReadyReplicas == *statefulset.Spec.Replicas &&
+		statefulset.Status.CurrentReplicas == *statefulset.Spec.Replicas &&
+		statefulset.Status.UpdatedReplicas == *statefulset.Spec.Replicas
+
+	if tracker.Status.Ready != isReady {
+		tracker.Status.Ready = isReady
+		tracker.Status.CurrentState.ReadyReplicas = statefulset.Status.ReadyReplicas
+		tracker.Status.CurrentState.TotalReplicas = *statefulset.Spec.Replicas
+
+		if isReady {
+			tracker.Status.Message = "Resource is running successfully"
+			r.Recorder.Event(tracker, corev1.EventTypeNormal, "ResourceReady",
+				fmt.Sprintf("Resource %s is running successfully", statefulset.Name))
+
+			if tracker.Spec.Notify.Slack != "" {
+				message := fmt.Sprintf("*StatefulSet %s/%s is now ready*\n"+
+					"> Status: Running\n"+
+					"> Ready Replicas: %d/%d",
+					statefulset.Namespace, statefulset.Name,
+					statefulset.Status.ReadyReplicas,
+					*statefulset.Spec.Replicas)
+
+				if err := sendSlackNotification(tracker.Spec.Notify.Slack, message); err != nil {
+					logger.Error(err, "Failed to send Slack notification")
+				}
+			}
 		} else {
 			tracker.Status.Message = "Resource is not ready"
 		}
