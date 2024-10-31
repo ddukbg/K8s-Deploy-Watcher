@@ -1,0 +1,308 @@
+package controllers
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/smtp"
+	"os"
+	"strings"
+	"time"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	v1alpha1 "k8s-deploy-watcher/api/v1alpha1"
+)
+
+// ImageState는 이미지의 상태를 추적하기 위한 구조체
+type ImageState struct {
+	Tag       string `json:"tag"`
+	Digest    string `json:"digest"`
+	FullImage string `json:"fullImage"` // 전체 이미지 문자열 저장
+}
+
+// DeploymentTrackerReconciler reconciles a DeploymentTracker object
+type DeploymentTrackerReconciler struct {
+	client.Client
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *DeploymentTrackerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v1alpha1.DeploymentTracker{}).
+		Watches(&appsv1.Deployment{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForDeployment)).
+		Complete(r)
+}
+
+// findObjectsForDeployment 함수는 Deployment 변경 시 관련된 DeploymentTracker를 찾습니다
+func (r *DeploymentTrackerReconciler) findObjectsForDeployment(ctx context.Context, obj client.Object) []reconcile.Request {
+	trackers := &v1alpha1.DeploymentTrackerList{}
+	err := r.List(ctx, trackers)
+	if err != nil {
+		return nil
+	}
+
+	requests := make([]reconcile.Request, 0)
+	for _, tracker := range trackers.Items {
+		if tracker.Spec.DeploymentName == obj.GetName() &&
+			tracker.Spec.Namespace == obj.GetNamespace() {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      tracker.Name,
+					Namespace: tracker.Namespace,
+				},
+			})
+		}
+	}
+	return requests
+}
+
+func (r *DeploymentTrackerReconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// 1. Custom Resource 가져오기
+	tracker := &v1alpha1.DeploymentTracker{}
+	if err := r.Get(ctx, req.NamespacedName, tracker); err != nil {
+		return reconcile.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// 2. Deployment 상태 확인
+	deployment := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Name:      tracker.Spec.DeploymentName,
+		Namespace: tracker.Spec.Namespace,
+	}, deployment); err != nil {
+		logger.Error(err, "Failed to fetch Deployment")
+		tracker.Status.Ready = false
+		tracker.Status.Message = fmt.Sprintf("Failed to fetch deployment: %v", err)
+		if err := r.Status().Update(ctx, tracker); err != nil {
+			logger.Error(err, "Failed to update DeploymentTracker status")
+		}
+		return reconcile.Result{RequeueAfter: time.Second * 30}, err
+	}
+
+	// 이미지 변경 감지 로그 추가
+	logger.Info("Checking image changes",
+		"deployment", deployment.Name,
+		"currentImage", deployment.Spec.Template.Spec.Containers[0].Image)
+
+	// 이미지 변경 감지
+	changed, oldImage, newImage := r.hasImageChanged(deployment)
+	if changed {
+		logger.Info("Image change detected",
+			"deployment", deployment.Name,
+			"oldImage", oldImage.FullImage,
+			"newImage", newImage.FullImage)
+
+		// Slack 알림 전송
+		if tracker.Spec.Notify.Slack != "" {
+			message := fmt.Sprintf("*Deployment %s/%s image updated*\n"+
+				"> Previous Image: %s\n"+
+				"> New Image: %s\n"+
+				"> Changed at: %s",
+				deployment.Namespace, deployment.Name,
+				oldImage.FullImage,
+				newImage.FullImage,
+				time.Now().Format(time.RFC3339))
+
+			if err := sendSlackNotification(tracker.Spec.Notify.Slack, message); err != nil {
+				logger.Error(err, "Failed to send Slack notification")
+			}
+		}
+	}
+
+	// Replicas 변경 확인도 따로 처리
+	if deployment.Status.ReadyReplicas == *deployment.Spec.Replicas {
+		if tracker.Status.ReadyReplicas != deployment.Status.ReadyReplicas {
+			// Replicas 변경에 대한 알림은 옵션으로 제공
+			if tracker.Spec.Notify.Slack != "" && tracker.Spec.NotifyOnScale { // NotifyOnScale 필드 추가 필요
+				message := fmt.Sprintf("Deployment %s scaled to %d/%d replicas",
+					deployment.Name,
+					deployment.Status.ReadyReplicas,
+					*deployment.Spec.Replicas)
+
+				if err := sendSlackNotification(tracker.Spec.Notify.Slack, message); err != nil {
+					logger.Error(err, "Failed to send scale notification")
+				}
+			}
+		}
+	}
+
+	// 3. 배포 상태 확인
+	if deployment.Spec.Replicas == nil {
+		logger.Info("Deployment has no replicas specified")
+		return reconcile.Result{}, nil
+	}
+
+	isReady := deployment.Status.ReadyReplicas == *deployment.Spec.Replicas && *deployment.Spec.Replicas > 0
+
+	// 상태가 변경된 경우에만 처리
+	if tracker.Status.Ready != isReady {
+		tracker.Status.Ready = isReady
+		tracker.Status.LastUpdated = &metav1.Time{Time: time.Now()}
+		tracker.Status.ObservedReplicas = deployment.Status.Replicas
+		tracker.Status.ReadyReplicas = deployment.Status.ReadyReplicas
+
+		if isReady {
+			tracker.Status.Message = "Deployment is running successfully"
+			// 4. 이벤트 기록
+			r.Recorder.Event(tracker, corev1.EventTypeNormal, "DeploymentReady",
+				fmt.Sprintf("Deployment %s is running successfully", deployment.Name))
+
+			// 5. 알림 전송
+			if tracker.Spec.Notify.Slack != "" {
+				message := fmt.Sprintf("Deployment %s is now ready with %d/%d replicas",
+					deployment.Name, deployment.Status.ReadyReplicas, *deployment.Spec.Replicas)
+				if err := sendSlackNotification(tracker.Spec.Notify.Slack, message); err != nil {
+					logger.Error(err, "Failed to send Slack notification")
+				}
+			}
+		} else {
+			tracker.Status.Message = "Deployment is not ready"
+		}
+
+		// 6. 상태 업데이트
+		if err := r.Status().Update(ctx, tracker); err != nil {
+			logger.Error(err, "Failed to update DeploymentTracker status")
+			return reconcile.Result{}, err
+		}
+	}
+
+	return reconcile.Result{RequeueAfter: time.Minute}, nil
+}
+
+// hasImageChanged는 Deployment의 이미지 변경을 감지합니다
+func (r *DeploymentTrackerReconciler) hasImageChanged(deployment *appsv1.Deployment) (bool, ImageState, ImageState) {
+	annotations := deployment.Annotations
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	// 현재 컨테이너의 이미지 상태 가져오기
+	currentImage := getContainerImageState(deployment)
+
+	// 이전 이미지 상태 확인
+	var previousImage ImageState
+	if previousImageJSON, ok := annotations["ddukbg.k8s/previous-image"]; ok {
+		_ = json.Unmarshal([]byte(previousImageJSON), &previousImage)
+	} else {
+		// 최초 실행시에는 현재 이미지를 이전 이미지로 설정
+		previousImage = currentImage
+		newImageJSON, _ := json.Marshal(currentImage)
+		if deployment.Annotations == nil {
+			deployment.Annotations = make(map[string]string)
+		}
+		deployment.Annotations["ddukbg.k8s/previous-image"] = string(newImageJSON)
+		if err := r.Update(context.Background(), deployment); err != nil {
+			return false, previousImage, currentImage
+		}
+		return false, previousImage, currentImage
+	}
+
+	// 실제 이미지 변경 여부 확인
+	if currentImage.FullImage != previousImage.FullImage {
+		// 변경사항이 있을 때만 어노테이션 업데이트
+		newImageJSON, _ := json.Marshal(currentImage)
+		deployment.Annotations["ddukbg.k8s/previous-image"] = string(newImageJSON)
+		if err := r.Update(context.Background(), deployment); err != nil {
+			return false, previousImage, currentImage
+		}
+		return true, previousImage, currentImage
+	}
+
+	return false, previousImage, currentImage
+}
+
+// getContainerImageState는 컨테이너의 현재 이미지 상태를 가져옵니다
+func getContainerImageState(deployment *appsv1.Deployment) ImageState {
+	containers := deployment.Spec.Template.Spec.Containers
+	if len(containers) == 0 {
+		return ImageState{}
+	}
+
+	image := containers[0].Image
+	imageState := ImageState{
+		FullImage: image, // 전체 이미지 문자열 저장
+	}
+
+	// 이미지 태그와 다이제스트 파싱
+	if strings.Contains(image, "@sha256:") {
+		parts := strings.Split(image, "@")
+		imageState.Digest = parts[1]
+
+		// 태그 파싱
+		tagParts := strings.Split(parts[0], ":")
+		if len(tagParts) > 1 {
+			imageState.Tag = tagParts[1]
+		} else {
+			imageState.Tag = "latest"
+		}
+	} else {
+		// 다이제스트가 없는 경우
+		parts := strings.Split(image, ":")
+		if len(parts) > 1 {
+			imageState.Tag = parts[1]
+		} else {
+			imageState.Tag = "latest"
+		}
+		imageState.Digest = "unknown"
+	}
+
+	return imageState
+}
+
+func sendSlackNotification(webhookURL, message string) error {
+	payload := map[string]string{
+		"text": message,
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal slack payload: %w", err)
+	}
+
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		return fmt.Errorf("failed to send slack notification: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("slack notification failed with status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+func sendEmailNotification(email, message string) error {
+	smtpHost := os.Getenv("SMTP_HOST")
+	smtpPort := os.Getenv("SMTP_PORT")
+	smtpUsername := os.Getenv("SMTP_USERNAME")
+	smtpPassword := os.Getenv("SMTP_PASSWORD")
+
+	auth := smtp.PlainAuth("", smtpUsername, smtpPassword, smtpHost)
+
+	to := []string{email}
+	msg := []byte(fmt.Sprintf("Subject: Deployment Status Update\r\n\r\n%s", message))
+
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, smtpUsername, to, msg)
+	if err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	return nil
+}

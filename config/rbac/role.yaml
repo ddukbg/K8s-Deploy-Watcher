@@ -5,7 +5,7 @@ metadata:
   name: deployment-tracker-role
 rules:
 - apiGroups: ["ddukbg.k8s"]
-  resources: ["deploymenttrackers"]
+  resources: ["resourcetrackers"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["apps"]
   resources: ["deployments"]
@@ -14,5 +14,5 @@ rules:
   resources: ["events"]  # events 리소스 추가
   verbs: ["create", "patch"]
 - apiGroups: ["ddukbg.k8s"]
-  resources: ["deploymenttrackers/status"]
+  resources: ["resourcetrackers/status"]
   verbs: ["get", "update", "patch"]

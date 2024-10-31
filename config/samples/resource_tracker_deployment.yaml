@@ -1,0 +1,35 @@
+# config/samples/resource_tracker_deployment.yaml
+apiVersion: ddukbg.k8s/v1alpha1
+kind: ResourceTracker
+metadata:
+  name: nginx-tracker
+spec:
+  target:
+    kind: Deployment
+    name: nginx-test
+    namespace: default
+  notify:
+    slack: "https://hooks.slack.com/services/YOUR-WEBHOOK-URL"
+    retryCount: 3
+    alertOnFail: true
+
+---
+# 테스트용 Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-test
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-test
+  template:
+    metadata:
+      labels:
+        app: nginx-test
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25.0
