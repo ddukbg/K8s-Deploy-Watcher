@@ -1,14 +1,16 @@
 ***개인적인 용도로 사용하기 위해 계속해서 개발 중입니다.***
 # K8s-Deploy-Watcher
 
-![Go Version](https://img.shields.io/badge/go-v1.22.1-blue.svg)  # Go 버전 업데이트
+![Go Version](https://img.shields.io/badge/go-v1.22.1-blue.svg)
 ![Kubernetes](https://img.shields.io/badge/kubernetes-%3E%3D1.21-blue.svg)
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Docker Pulls](https://img.shields.io/docker/pulls/ddukbg/k8s-deploy-watcher)
 ![Tests](https://github.com/ddukbg/k8s-deploy-watcher/workflows/Test/badge.svg)
-![Test Coverage](https://img.shields.io/badge/coverage-47.5%25-brightgreen.svg)  # 커버리지 배지 추가
+![Test Coverage](https://img.shields.io/badge/coverage-47.5%25-brightgreen.svg)
 
-K8s-Deploy-Watcher는 Kubernetes Deployment의 실시간 상태를 모니터링하고 배포 결과를 Slack 또는 이메일로 알려주는 Kubernetes Operator입니다.
+K8s-Deploy-Watcher는 Kubernetes Deployment의 실시간 상태를 모니터링하고 
+
+배포 결과를 Slack 또는 이메일로 알려주는 Kubernetes Operator입니다.
 
 ## 🌟 주요 기능
 
