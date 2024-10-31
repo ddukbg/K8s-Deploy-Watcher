@@ -46,8 +46,8 @@ controller-gen:
 # Generate code and manifests
 .PHONY: generate
 generate: controller-gen
-	$(CONTROLLER_GEN) object paths="./api/v1alpha1/..." paths="./controllers/..."
-	$(CONTROLLER_GEN) crd paths="./api/v1alpha1/..." output:crd:artifacts:config=config/crd/bases
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/..."
+	$(CONTROLLER_GEN) rbac:roleName=manager-role crd paths="./api/..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: manifests
 manifests: controller-gen

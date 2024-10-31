@@ -1,3 +1,5 @@
+// main.go
+
 package main
 
 import (
@@ -14,7 +16,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	v1alpha1 "k8s-deploy-watcher/api/v1alpha1"
+	ddukbgv1alpha1 "k8s-deploy-watcher/api/v1alpha1"
 	"k8s-deploy-watcher/controllers"
 )
 
@@ -25,7 +27,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(v1alpha1.AddToScheme(scheme))
+	utilruntime.Must(ddukbgv1alpha1.AddToScheme(scheme))
 }
 
 func main() {
@@ -54,22 +56,24 @@ func main() {
 		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443}),
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "d5375419.ddukbg",
+		LeaderElectionID:       "d5375419.ddukbg.k8s", // Group 명에 맞게 수정
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	if err = (&controllers.DeploymentTrackerReconciler{
+	// ResourceTrackerReconciler 설정
+	if err = (&controllers.ResourceTrackerReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("deployment-tracker"),
+		Recorder: mgr.GetEventRecorderFor("resource-tracker"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "DeploymentTracker")
+		setupLog.Error(err, "unable to create controller", "controller", "ResourceTracker")
 		os.Exit(1)
 	}
 
+	// Health check 엔드포인트 설정
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
