@@ -43,10 +43,14 @@ func (r *ResourceTrackerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&appsv1.StatefulSet{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForResource),
 		).
+		Watches(
+			&corev1.Pod{},
+			handler.EnqueueRequestsFromMapFunc(r.findObjectsForResource),
+		).
 		Complete(r)
 }
 
-// findObjectsForResource maps a Deployment to its ResourceTracker
+// findObjectsForResource finds ResourceTrackers that monitor the given resource
 func (r *ResourceTrackerReconciler) findObjectsForResource(ctx context.Context, obj client.Object) []ctrl.Request {
 	trackers := &ddukbgv1alpha1.ResourceTrackerList{}
 	err := r.List(ctx, trackers)
@@ -56,22 +60,29 @@ func (r *ResourceTrackerReconciler) findObjectsForResource(ctx context.Context, 
 
 	var requests []ctrl.Request
 	for _, tracker := range trackers.Items {
-		if (tracker.Spec.Target.Kind == "Deployment" || tracker.Spec.Target.Kind == "StatefulSet") &&
-			tracker.Spec.Target.Name == obj.GetName() &&
-			tracker.Spec.Target.Namespace == obj.GetNamespace() {
-			requests = append(requests, ctrl.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      tracker.Name,
-					Namespace: tracker.Namespace,
-				},
-			})
+		// 리소스 종류 확인
+		if (tracker.Spec.Target.Kind == "Deployment" && obj.GetObjectKind().GroupVersionKind().Kind == "Deployment") ||
+			(tracker.Spec.Target.Kind == "StatefulSet" && obj.GetObjectKind().GroupVersionKind().Kind == "StatefulSet") ||
+			(tracker.Spec.Target.Kind == "Pod" && obj.GetObjectKind().GroupVersionKind().Kind == "Pod") {
+
+			// 네임스페이스 확인
+			if tracker.Spec.Target.Namespace == obj.GetNamespace() {
+				// 특정 리소스 이름이 지정되었다면 이름도 확인
+				if tracker.Spec.Target.Name == "" || tracker.Spec.Target.Name == obj.GetName() {
+					requests = append(requests, ctrl.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      tracker.Name,
+							Namespace: tracker.Namespace,
+						},
+					})
+				}
+			}
 		}
 	}
-
 	return requests
 }
 
-// Reconcile handles the main reconciliation logic
+// Reconcile 함수 수정
 func (r *ResourceTrackerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
@@ -81,12 +92,16 @@ func (r *ResourceTrackerReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// 리소스 종류에 따른 처리
+	// 리소스 상태 초기화
+	tracker.Status.ResourceStates = []ddukbgv1alpha1.ResourceState{}
+
 	switch tracker.Spec.Target.Kind {
 	case "Deployment":
 		return r.reconcileDeployment(ctx, tracker)
 	case "StatefulSet":
 		return r.reconcileStatefulSet(ctx, tracker)
+	case "Pod":
+		return r.reconcilePod(ctx, tracker)
 	default:
 		err := fmt.Errorf("unsupported resource kind: %s", tracker.Spec.Target.Kind)
 		logger.Error(err, "Unsupported resource kind")

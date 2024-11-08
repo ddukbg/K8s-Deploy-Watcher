@@ -1,0 +1,41 @@
+# config/samples/resource_tracker_namespace.yaml
+apiVersion: ddukbg.k8s/v1alpha1
+kind: ResourceTracker
+metadata:
+  name: ns-deployments-tracker
+spec:
+  target:
+    kind: Deployment
+    namespace: default
+  notify:
+    slack: "https://hooks.slack.com/services/..."
+    retryCount: 3
+    alertOnFail: true
+
+---
+apiVersion: ddukbg.k8s/v1alpha1
+kind: ResourceTracker
+metadata:
+  name: ns-statefulsets-tracker
+spec:
+  target:
+    kind: StatefulSet
+    namespace: default
+  notify:
+    slack: "https://hooks.slack.com/services/..."
+    retryCount: 3
+    alertOnFail: true
+
+---
+apiVersion: ddukbg.k8s/v1alpha1
+kind: ResourceTracker
+metadata:
+  name: ns-pods-tracker
+spec:
+  target:
+    kind: Pod
+    namespace: default
+  notify:
+    slack: "https://hooks.slack.com/services/..."
+    retryCount: 3
+    alertOnFail: true
