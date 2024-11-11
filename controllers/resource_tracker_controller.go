@@ -373,3 +373,54 @@ func (r *ResourceTrackerReconciler) detectImageChange(deployment *appsv1.Deploym
 
 	return false, currentImage, currentImage
 }
+
+// reconcilePod handles Pod type resources
+func (r *ResourceTrackerReconciler) reconcilePod(ctx context.Context, tracker *ddukbgv1alpha1.ResourceTracker) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Pod 가져오기
+	pod := &corev1.Pod{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Name:      tracker.Spec.Target.Name,
+		Namespace: tracker.Spec.Target.Namespace,
+	}, pod); err != nil {
+		logger.Error(err, "Failed to fetch Pod")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	// Pod 상태 확인
+	isReady := pod.Status.Phase == corev1.PodRunning
+	if tracker.Status.Ready != isReady {
+		tracker.Status.Ready = isReady
+		tracker.Status.CurrentState.ReadyReplicas = 1
+		tracker.Status.CurrentState.TotalReplicas = 1
+
+		if isReady {
+			tracker.Status.Message = "Pod is running successfully"
+			r.Recorder.Event(tracker, corev1.EventTypeNormal, "PodReady",
+				fmt.Sprintf("Pod %s is running successfully", pod.Name))
+
+			// Slack 알림 전송
+			if tracker.Spec.Notify.Slack != "" {
+				message := fmt.Sprintf("*Pod %s/%s is now ready*\n"+
+					"> Status: Running\n"+
+					"> Phase: %s",
+					pod.Namespace, pod.Name,
+					pod.Status.Phase)
+
+				if err := sendSlackNotification(tracker.Spec.Notify.Slack, message); err != nil {
+					logger.Error(err, "Failed to send Slack notification")
+				}
+			}
+		} else {
+			tracker.Status.Message = fmt.Sprintf("Pod is not ready: %s", pod.Status.Phase)
+		}
+
+		if err := r.Status().Update(ctx, tracker); err != nil {
+			logger.Error(err, "Failed to update ResourceTracker status")
+			return ctrl.Result{}, err
+		}
+	}
+
+	return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+}

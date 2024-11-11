@@ -64,6 +64,10 @@ type ResourceState struct {
 
 	// Resource specific messages
 	Message string `json:"message,omitempty"`
+
+	// CurrentState 필드 추가
+	CurrentImage  string `json:"currentImage,omitempty"`
+	PreviousImage string `json:"previousImage,omitempty"`
 }
 
 // ImageState tracks image information
@@ -86,6 +90,9 @@ type ResourceTrackerStatus struct {
 
 	// Overall status message
 	Message string `json:"message,omitempty"`
+
+	// CurrentState 필드 추가
+	CurrentState ResourceState `json:"currentState,omitempty"`
 }
 
 // +kubebuilder:object:root=true
