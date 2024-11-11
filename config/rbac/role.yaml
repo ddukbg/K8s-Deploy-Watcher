@@ -2,17 +2,23 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: deployment-tracker-role
+  name: manager-role
 rules:
-- apiGroups: ["ddukbg.k8s"]
-  resources: ["resourcetrackers"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]  # Pod는 core API group에 속함
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]  # StatefulSet은 apps API group에 속함
+  resources: ["statefulsets"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["apps"]
   resources: ["deployments"]
   verbs: ["get", "list", "watch", "update", "patch"]
-- apiGroups: [""]
-  resources: ["events"]  # events 리소스 추가
-  verbs: ["create", "patch"]
+- apiGroups: ["ddukbg.k8s"]
+  resources: ["resourcetrackers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["ddukbg.k8s"]
   resources: ["resourcetrackers/status"]
   verbs: ["get", "update", "patch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
