@@ -32,7 +32,7 @@ vet:
 
 .PHONY: test
 test: generate fmt vet
-	go test ./... -coverprofile cover.out
+	go test ./... -coverprofile cover.out -timeout 30s -v
 
 .PHONY: build
 build: generate
@@ -73,11 +73,11 @@ docker-all: docker-build docker-tag docker-push
 
 .PHONY: install
 install:
-	kubectl apply -f config/crd/bases/ddukbg.k8s_deploymenttrackers.yaml
+	kubectl apply -f config/crd/bases/ddukbg.k8s_resourcetrackers.yaml
 
 .PHONY: uninstall
 uninstall:
-	kubectl delete -f config/crd/bases/ddukbg.k8s_deploymenttrackers.yaml
+	kubectl delete -f config/crd/bases/ddukbg.k8s_resourcetrackers.yaml
 
 .PHONY: deploy
 deploy: manifests docker-build docker-push install

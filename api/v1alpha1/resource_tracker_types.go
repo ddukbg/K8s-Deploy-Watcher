@@ -91,8 +91,12 @@ type ResourceTrackerStatus struct {
 	// Overall status message
 	Message string `json:"message,omitempty"`
 
-	// CurrentState 필드 추가
+	// CurrentState 필드
 	CurrentState ResourceState `json:"currentState,omitempty"`
+
+	// 리소스 상태 추적을 위한 필드 추가
+	ResourceStatus   map[string]bool   `json:"resourceStatus,omitempty"`
+	GenerationStatus map[string]string `json:"generationStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true
