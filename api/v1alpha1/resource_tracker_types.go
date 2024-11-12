@@ -20,11 +20,24 @@ type ResourceTrackerSpec struct {
 
 // ResourceTarget defines the target resource to monitor
 type ResourceTarget struct {
-	// +kubebuilder:validation:Enum=Deployment;StatefulSet
-	Kind      string `json:"kind"`
-	Name      string `json:"name"`
-	Namespace string `json:"namespace,omitempty"`
+	// +kubebuilder:validation:Enum=Deployment;StatefulSet;Pod
+	// +kubebuilder:validation:Required
+	Kind string `json:"kind"`
+
+	// +optional
+	// Name is optional; if empty, all resources of the specified Kind in the Namespace will be monitored
+	Name string `json:"name,omitempty"`
+
+	// +kubebuilder:validation:Required
+	// Namespace to monitor resources in
+	Namespace string `json:"namespace"`
 }
+
+// +kubebuilder:printcolumn:name="Kind",type="string",JSONPath=".spec.target.kind"
+// +kubebuilder:printcolumn:name="Namespace",type="string",JSONPath=".spec.target.namespace"
+// +kubebuilder:printcolumn:name="Resource",type="string",JSONPath=".spec.target.name"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // NotifyConfig defines notification configuration
 type NotifyConfig struct {
@@ -36,9 +49,25 @@ type NotifyConfig struct {
 
 // ResourceState tracks the current state of the resource
 type ResourceState struct {
-	ImageState    ImageState `json:"imageState,omitempty"`
-	ReadyReplicas int32      `json:"readyReplicas,omitempty"`
-	TotalReplicas int32      `json:"totalReplicas,omitempty"`
+	// Resource name
+	Name string `json:"name"`
+
+	// Current image information
+	ImageState ImageState `json:"imageState,omitempty"`
+
+	// Replicas status (for Deployment and StatefulSet)
+	ReadyReplicas int32 `json:"readyReplicas,omitempty"`
+	TotalReplicas int32 `json:"totalReplicas,omitempty"`
+
+	// Pod specific status
+	PodPhase string `json:"podPhase,omitempty"`
+
+	// Resource specific messages
+	Message string `json:"message,omitempty"`
+
+	// CurrentState 필드 추가
+	CurrentImage  string `json:"currentImage,omitempty"`
+	PreviousImage string `json:"previousImage,omitempty"`
 }
 
 // ImageState tracks image information
@@ -50,10 +79,24 @@ type ImageState struct {
 
 // ResourceTrackerStatus defines the observed state of ResourceTracker
 type ResourceTrackerStatus struct {
-	Ready        bool          `json:"ready,omitempty"`
-	LastUpdated  *metav1.Time  `json:"lastUpdated,omitempty"`
+	// Overall ready status
+	Ready bool `json:"ready,omitempty"`
+
+	// Last time the status was updated
+	LastUpdated *metav1.Time `json:"lastUpdated,omitempty"`
+
+	// Status of each resource being tracked
+	ResourceStates []ResourceState `json:"resourceStates,omitempty"`
+
+	// Overall status message
+	Message string `json:"message,omitempty"`
+
+	// CurrentState 필드
 	CurrentState ResourceState `json:"currentState,omitempty"`
-	Message      string        `json:"message,omitempty"`
+
+	// 리소스 상태 추적을 위한 필드 추가
+	ResourceStatus   map[string]bool   `json:"resourceStatus,omitempty"`
+	GenerationStatus map[string]string `json:"generationStatus,omitempty"`
 }
 
 // +kubebuilder:object:root=true

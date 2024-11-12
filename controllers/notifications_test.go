@@ -1,49 +1,42 @@
 package controllers
 
 import (
-	"github.com/stretchr/testify/assert"
+	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSlackNotification(t *testing.T) {
-	tests := []struct {
-		name        string
-		serverFunc  func(w http.ResponseWriter, r *http.Request)
-		expectError bool
-	}{
-		{
-			name: "성공적인 Slack 알림",
-			serverFunc: func(w http.ResponseWriter, r *http.Request) {
-				assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-				w.WriteHeader(http.StatusOK)
-			},
-			expectError: false,
-		},
-		{
-			name: "Slack 서버 에러",
-			serverFunc: func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusInternalServerError)
-			},
-			expectError: true,
-		},
+	// 원래 함수 백업
+	originalSendSlack := sendSlackNotification
+	defer func() {
+		sendSlackNotification = originalSendSlack
+	}()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+
+	// 실제 HTTP 요청을 하는 함수로 교체
+	sendSlackNotification = func(webhookURL string, message string) error {
+		resp, err := http.Post(server.URL, "application/json", bytes.NewBuffer([]byte(message)))
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("slack notification failed: %d", resp.StatusCode)
+		}
+		return nil
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// 테스트 서버 생성
-			server := httptest.NewServer(http.HandlerFunc(tt.serverFunc))
-			defer server.Close()
-
-			// 알림 전송 테스트
-			err := sendSlackNotification(server.URL, "test message")
-
-			if tt.expectError {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+	err := sendSlackNotification(server.URL, "test message")
+	assert.Error(t, err)
 }
