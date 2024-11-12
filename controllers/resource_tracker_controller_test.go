@@ -265,7 +265,16 @@ func TestReconcileResourceTracker(t *testing.T) {
 				select {
 				case event := <-recorder.Events:
 					t.Logf("Received event: %s", event)
-					assert.Contains(t, event, "ResourceReady")
+					expectedEvent := ""
+					switch tt.kind {
+					case "Deployment":
+						expectedEvent = "DeploymentReady"
+					case "StatefulSet":
+						expectedEvent = "StatefulSetReady"
+					case "Pod":
+						expectedEvent = "PodReady"
+					}
+					assert.Contains(t, event, expectedEvent)
 				case <-time.After(time.Second):
 					t.Error("Expected event not received")
 				}
@@ -420,7 +429,7 @@ func TestReconcileEvents(t *testing.T) {
 				select {
 				case event := <-recorder.Events:
 					t.Logf("Received event: %s", event)
-					if strings.Contains(event, "ResourceReady") {
+					if strings.Contains(event, "DeploymentReady") {
 						eventReceived = true
 						break
 					}
