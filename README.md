@@ -6,6 +6,7 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 ## 목차
+
 - [주요 기능](#-주요-기능)
 - [시스템 요구사항](#-시스템-요구사항)
 - [배포 가이드](#-배포-가이드)
@@ -23,7 +24,6 @@
 - [모니터링 동작 방식](#-모니터링-동작-방식)
 - [개발 환경 설정](#-개발-환경-설정)
 - [라이선스](#-라이선스)
-
 
 K8s-Deploy-Watcher는 Kubernetes 리소스의 실시간 상태를 모니터링하고 
 상태 변경을 Slack으로 알려주는 Custom Controller입니다.
@@ -81,18 +81,18 @@ kind: ClusterRole
 metadata:
   name: k8s-deploy-watcher-role
 rules:
-- apiGroups: ["ddukbg.k8s"]
-  resources: ["resourcetrackers"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-- apiGroups: [""]
-  resources: ["pods"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["apps"]
-  resources: ["deployments", "statefulsets"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["create", "patch"]
+  - apiGroups: ["ddukbg.k8s"]
+    resources: ["resourcetrackers"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
 ```
 
 ### 3. 이미지 빌드 및 푸시
@@ -172,20 +172,19 @@ kubectl delete namespace k8s-deploy-watcher-system
 
 ### 1. ResourceTracker 생성 - 단일 리소스 모니터링
 
-
 ```yaml
 apiVersion: ddukbg.k8s/v1alpha1
 kind: ResourceTracker
 metadata:
-name: nginx-tracker
-namespace: default
+  name: nginx-tracker
+  namespace: default
 spec:
-target:
-kind: Deployment # Deployment, StatefulSet, Pod
-name: nginx # 특정 리소스 이름
-namespace: default
-notify:
-slack: "https://hooks.slack.com/services/..."
+  target:
+    kind: Deployment # Deployment, StatefulSet, Pod
+    name: nginx      # 특정 리소스 이름
+    namespace: default
+  notify:
+    slack: "https://hooks.slack.com/services/..."
 ```
 
 ### 2. ResourceTracker 생성 - 네임스페이스 전체 모니터링
@@ -194,19 +193,17 @@ slack: "https://hooks.slack.com/services/..."
 apiVersion: ddukbg.k8s/v1alpha1
 kind: ResourceTracker
 metadata:
-name: namespace-pods-tracker
-namespace: monitoring
+  name: namespace-pods-tracker
+  namespace: monitoring
 spec:
-target:
-kind: Pod # Deployment, StatefulSet, Pod
-namespace: default # 모니터링할 네임스페이스
-notify:
-slack: "https://hooks.slack.com/services/..."
+  target:
+    kind: Pod          # Deployment, StatefulSet, Pod
+    namespace: default # 모니터링할 네임스페이스
+  notify:
+    slack: "https://hooks.slack.com/services/..."
 ```
 
 ## 🔍 상태 확인
-
-
 
 ```bash
 # ResourceTracker 상태 확인
