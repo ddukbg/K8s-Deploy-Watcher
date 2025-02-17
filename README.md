@@ -181,7 +181,7 @@ metadata:
 spec:
   target:
     kind: Deployment # Deployment, StatefulSet, Pod
-    name: nginx # 특정 리소스 이름
+    name: nginx      # 특정 리소스 이름
     namespace: default
   notify:
     slack: "https://hooks.slack.com/services/..."
@@ -197,7 +197,7 @@ metadata:
   namespace: monitoring
 spec:
   target:
-    kind: Pod # Deployment, StatefulSet, Pod
+    kind: Pod          # Deployment, StatefulSet, Pod
     namespace: default # 모니터링할 네임스페이스
   notify:
     slack: "https://hooks.slack.com/services/..."
